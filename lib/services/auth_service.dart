@@ -1,7 +1,11 @@
+// lib/services/auth_service.dart
+
 import 'package:firebase_auth/firebase_auth.dart';
+// Removed: import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Removed: shared_preferences methods and keys
 
   // Get current user
   User? get currentUser => _auth.currentUser;
@@ -19,6 +23,7 @@ class AuthService {
         email: email,
         password: password,
       );
+      // Removed: _setLoggedIn(true) call
       return userCredential;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
@@ -35,6 +40,7 @@ class AuthService {
         email: email,
         password: password,
       );
+      // Removed: _setLoggedIn(true) call
       return userCredential;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
@@ -53,6 +59,7 @@ class AuthService {
   // Sign out
   Future<void> signOut() async {
     await _auth.signOut();
+    // Removed: _setLoggedIn(false) call
   }
 
   // Handle Firebase Auth exceptions

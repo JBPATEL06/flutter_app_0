@@ -13,8 +13,8 @@ import './screens/forgot_password_screen.dart';
 import './screens/category_screen.dart';
 import './screens/expense_screen.dart';
 import './screens/all_expenses.dart';
-import './screens/split_expense_screen.dart'; // NEW IMPORT
-import './screens/group_detail_screen.dart'; // NEW IMPORT
+import './screens/split_expense_screen.dart'; 
+import './screens/group_detail_screen.dart'; 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,7 +42,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home: const AuthWrapper(),
+      home: const AuthWrapper(), // AuthWrapper handles the initial routing
       routes: {
         LoginScreen.name: (_) => const LoginScreen(),
         SignupScreen.name: (_) => const SignupScreen(),
@@ -50,43 +50,76 @@ class MyApp extends StatelessWidget {
         CategoryScreen.name: (_) => const CategoryScreen(),
         ExpenseScreen.name: (_) => const ExpenseScreen(),
         AllExpenses.name: (_) => const AllExpenses(),
-        SplitExpenseScreen.name: (_) => const SplitExpenseScreen(), // NEW ROUTE
-        GroupDetailScreen.name: (_) => const GroupDetailScreen(), // NEW ROUTE
+        SplitExpenseScreen.name: (_) => const SplitExpenseScreen(), 
+        GroupDetailScreen.name: (_) => const GroupDetailScreen(), 
       },
     );
   }
 }
 
-// Auth wrapper to handle authentication state
+// Auth wrapper uses Firebase Auth Stream to determine the initial screen
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // The core function for checking Firebase Auth session state
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Show loading while checking auth state
+        // 1. SPLASH SCREEN / LOADING STATE: 
+        // This runs when Firebase is checking for an active session token.
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
+          return Scaffold(
+            body: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.blue.shade800,
+                    Colors.purple.shade600,
+                  ],
+                ),
+              ),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.account_balance_wallet,
+                      size: 100,
+                      color: Colors.white,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Expense Manager',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 32),
+                    CircularProgressIndicator(color: Colors.white),
+                  ],
+                ),
+              ),
             ),
           );
         }
 
-        // If user is logged in
+        // 2. LOGGED IN STATE: If Firebase finds a valid user token
         if (snapshot.hasData && snapshot.data != null) {
-          // Initialize categories for the user if needed
+          // Initialize categories for new user if needed
           final firestoreService = FirestoreService();
           firestoreService.initializeCategories(snapshot.data!.uid);
 
           // Navigate to category screen
-          // We will start on the CategoryScreen by default
           return const CategoryScreen();
         }
 
-        // If user is not logged in, show login screen
+        // 3. LOGGED OUT STATE: If there is no user, show login screen
         return const LoginScreen();
       },
     );

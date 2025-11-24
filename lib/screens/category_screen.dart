@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../widgets/category_screen/category_fetcher.dart';
 import '../widgets/expense_form.dart';
-import './split_expense_screen.dart'; // NEW IMPORT
+import './split_expense_screen.dart'; 
+import './login_screen.dart'; // ADDED IMPORT
 
-enum MenuAction { logout, splitExpense } // NEW ENUM
+enum MenuAction { logout, splitExpense } 
 
 class CategoryScreen extends StatelessWidget {
   const CategoryScreen({super.key});
@@ -35,7 +36,14 @@ class CategoryScreen extends StatelessWidget {
     if (shouldLogout == true && context.mounted) {
       final authService = AuthService();
       await authService.signOut();
-      // Navigation will be handled by AuthWrapper
+      
+      // FIX: Clear all routes and push to the LoginScreen
+      if (context.mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          LoginScreen.name, 
+          (route) => false, // Clears the entire navigation stack
+        );
+      }
     }
   }
 
@@ -45,7 +53,7 @@ class CategoryScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Expense Categories'),
         actions: [
-          PopupMenuButton<MenuAction>( // MODIFIED: Pop-up menu for navigation/logout
+          PopupMenuButton<MenuAction>(
             onSelected: (item) {
               switch (item) {
                 case MenuAction.logout:

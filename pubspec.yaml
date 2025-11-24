@@ -20,6 +20,7 @@ dependencies:
   
   # Utilities
   intl: ^0.17.0
+  shared_preferences: ^2.2.2
   
   # Charts
   fl_chart: ^1.1.1
@@ -36,3 +37,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # NEW SECTION: Add the assets folder declaration here
+  assets: 
+    - assets/
