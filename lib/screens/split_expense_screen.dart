@@ -1,19 +1,34 @@
-// lib/screens/category_screen.dart
+// lib/screens/split_expense_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/database_provider.dart';
+import '../widgets/split_expense_screen/split_group_list.dart';
+import '../widgets/split_expense_screen/add_group_form.dart';
 import '../services/auth_service.dart';
-import '../widgets/category_screen/category_fetcher.dart';
-import '../widgets/expense_form.dart';
-import './split_expense_screen.dart'; // NEW IMPORT
+import './category_screen.dart';
 
-enum MenuAction { logout, splitExpense } // NEW ENUM
+enum MenuAction { logout, expenseCategories }
 
-class CategoryScreen extends StatelessWidget {
-  const CategoryScreen({super.key});
-  static const name = '/category_screen';
-  
+class SplitExpenseScreen extends StatefulWidget {
+  const SplitExpenseScreen({super.key});
+  static const name = '/split_expense_screen';
+
+  @override
+  State<SplitExpenseScreen> createState() => _SplitExpenseScreenState();
+}
+
+class _SplitExpenseScreenState extends State<SplitExpenseScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Fetch all split groups when widget initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<DatabaseProvider>(context, listen: false).fetchSplitGroups();
+    });
+  }
+
   Future<void> _handleLogout(BuildContext context) async {
-    // Show confirmation dialog
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -35,7 +50,6 @@ class CategoryScreen extends StatelessWidget {
     if (shouldLogout == true && context.mounted) {
       final authService = AuthService();
       await authService.signOut();
-      // Navigation will be handled by AuthWrapper
     }
   }
 
@@ -43,28 +57,28 @@ class CategoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Expense Categories'),
+        title: const Text('Group Expenses'),
         actions: [
-          PopupMenuButton<MenuAction>( // MODIFIED: Pop-up menu for navigation/logout
+          PopupMenuButton<MenuAction>(
             onSelected: (item) {
               switch (item) {
                 case MenuAction.logout:
                   _handleLogout(context);
                   break;
-                case MenuAction.splitExpense:
-                  // Switch to Split Expense Screen
-                  Navigator.of(context).pushReplacementNamed(SplitExpenseScreen.name);
+                case MenuAction.expenseCategories:
+                  // Switch to Expense Categories Screen
+                  Navigator.of(context).pushReplacementNamed(CategoryScreen.name);
                   break;
               }
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<MenuAction>>[
               const PopupMenuItem<MenuAction>(
-                value: MenuAction.splitExpense,
+                value: MenuAction.expenseCategories,
                 child: Row(
                   children: [
-                    Icon(Icons.group),
+                    Icon(Icons.category),
                     SizedBox(width: 8),
-                    Text('Group Expenses'),
+                    Text('Expense Categories'),
                   ],
                 ),
               ),
@@ -82,16 +96,27 @@ class CategoryScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: const CategoryFetcher(),
+      body: Column(
+        children: const [
+          Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              'Groups',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(child: SplitGroupList()),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           showModalBottomSheet(
             context: context,
             isScrollControlled: true,
-            builder: (_) => const ExpenseForm(),
+            builder: (_) => const AddGroupForm(),
           );
         },
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.group_add),
       ),
     );
   }

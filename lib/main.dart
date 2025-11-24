@@ -1,3 +1,5 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,6 +13,8 @@ import './screens/forgot_password_screen.dart';
 import './screens/category_screen.dart';
 import './screens/expense_screen.dart';
 import './screens/all_expenses.dart';
+import './screens/split_expense_screen.dart'; // NEW IMPORT
+import './screens/group_detail_screen.dart'; // NEW IMPORT
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +50,8 @@ class MyApp extends StatelessWidget {
         CategoryScreen.name: (_) => const CategoryScreen(),
         ExpenseScreen.name: (_) => const ExpenseScreen(),
         AllExpenses.name: (_) => const AllExpenses(),
+        SplitExpenseScreen.name: (_) => const SplitExpenseScreen(), // NEW ROUTE
+        GroupDetailScreen.name: (_) => const GroupDetailScreen(), // NEW ROUTE
       },
     );
   }
@@ -76,6 +82,7 @@ class AuthWrapper extends StatelessWidget {
           firestoreService.initializeCategories(snapshot.data!.uid);
 
           // Navigate to category screen
+          // We will start on the CategoryScreen by default
           return const CategoryScreen();
         }
 

@@ -1,8 +1,11 @@
+// lib/models/database_provider.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firestore_service.dart';
 import './ex_category.dart';
 import './expense.dart';
+import './split_group.dart'; 
 
 class DatabaseProvider with ChangeNotifier {
   final FirestoreService _firestoreService = FirestoreService();
@@ -19,7 +22,6 @@ class DatabaseProvider with ChangeNotifier {
   List<ExpenseCategory> get categories => _categories;
 
   List<Expense> _expenses = [];
-  // When the search text is empty, return whole list, else search for the value
   List<Expense> get expenses {
     return _searchText != ''
         ? _expenses
@@ -29,55 +31,66 @@ class DatabaseProvider with ChangeNotifier {
         : _expenses;
   }
 
-  // Get current user ID
+  // Split Group State
+  List<SplitGroup> _splitGroups = [];
+  // Filter only by search text, as hold feature is removed for groups.
+  List<SplitGroup> get splitGroups {
+    return _searchText != ''
+        ? _splitGroups
+            .where((g) => g.title.toLowerCase().contains(_searchText.toLowerCase()))
+            .toList()
+        : _splitGroups;
+  }
+  
+  List<SplitGroup> get allSplitGroups => _splitGroups;
+
+  SplitGroup? _currentSplitGroup;
+  SplitGroup? get currentSplitGroup => _currentSplitGroup;
+
+  List<GroupExpense> _groupExpenses = [];
+  List<GroupExpense> get groupExpenses {
+    return _groupExpenses.where((e) => e.isHold == false).toList();
+  }
+  
+  List<GroupExpense> get allGroupExpenses => _groupExpenses;
+
   String? get _userId => FirebaseAuth.instance.currentUser?.uid;
 
-  // Initialize categories for new user
+  // Existing Expense Category Methods
   Future<void> initializeCategories() async {
     if (_userId == null) return;
     await _firestoreService.initializeCategories(_userId!);
   }
 
-  // Fetch categories with real-time updates
   void fetchCategories() {
     if (_userId == null) return;
-
     _firestoreService.fetchCategories(_userId!).listen((categories) {
       _categories = categories;
       notifyListeners();
     });
   }
 
-  // Update category
   Future<void> updateCategory(
     String category,
     int nEntries,
     double nTotalAmount,
   ) async {
     if (_userId == null) return;
-
     await _firestoreService.updateCategory(
       _userId!,
       category,
       nEntries,
       nTotalAmount,
     );
-
-    // Update in-app memory
     var file = _categories.firstWhere((element) => element.title == category);
     file.entries = nEntries;
     file.totalAmount = nTotalAmount;
     notifyListeners();
   }
 
-  // Add an expense to database
   Future<void> addExpense(Expense exp) async {
     if (_userId == null) return;
-
-    // Add to Firestore
     final docId = await _firestoreService.addExpense(_userId!, exp);
-
-    // Create expense with generated ID
     final file = Expense(
       id: docId,
       title: exp.title,
@@ -85,58 +98,42 @@ class DatabaseProvider with ChangeNotifier {
       date: exp.date,
       category: exp.category,
     );
-
-    // Add to in-app memory
     _expenses.add(file);
     notifyListeners();
-
-    // Update category
     var ex = findCategory(exp.category);
     updateCategory(exp.category, ex.entries + 1, ex.totalAmount + exp.amount);
   }
 
-  // Delete expense
   Future<void> deleteExpense(
       String expId, String category, double amount) async {
     if (_userId == null) return;
-
     await _firestoreService.deleteExpense(_userId!, expId);
-
-    // Remove from in-app memory
     _expenses.removeWhere((element) => element.id == expId);
     notifyListeners();
-
-    // Update category
     var ex = findCategory(category);
     updateCategory(category, ex.entries - 1, ex.totalAmount - amount);
   }
 
-  // Fetch expenses by category with real-time updates
   void fetchExpenses(String category) {
     if (_userId == null) return;
-
     _firestoreService.fetchExpenses(_userId!, category).listen((expenses) {
       _expenses = expenses;
       notifyListeners();
     });
   }
 
-  // Fetch all expenses with real-time updates
   void fetchAllExpenses() {
     if (_userId == null) return;
-
     _firestoreService.fetchAllExpenses(_userId!).listen((expenses) {
       _expenses = expenses;
       notifyListeners();
     });
   }
 
-  // Find category by title
   ExpenseCategory findCategory(String title) {
     return _categories.firstWhere((element) => element.title == title);
   }
 
-  // Calculate entries and amount for a category
   Map<String, dynamic> calculateEntriesAndAmount(String category) {
     double total = 0.0;
     var list = _expenses.where((element) => element.category == category);
@@ -146,37 +143,218 @@ class DatabaseProvider with ChangeNotifier {
     return {'entries': list.length, 'totalAmount': total};
   }
 
-  // Calculate total expenses
   double calculateTotalExpenses() {
     return _categories.fold(
         0.0, (previousValue, element) => previousValue + element.totalAmount);
   }
 
-  // Calculate week expenses
   List<Map<String, dynamic>> calculateWeekExpenses() {
     List<Map<String, dynamic>> data = [];
-
-    // We know that we need 7 entries
     for (int i = 0; i < 7; i++) {
-      // 1 total for each entry
       double total = 0.0;
-      // Subtract i from today to get previous dates
       final weekDay = DateTime.now().subtract(Duration(days: i));
-
-      // Check how many transactions happened that day
       for (int j = 0; j < _expenses.length; j++) {
         if (_expenses[j].date.year == weekDay.year &&
             _expenses[j].date.month == weekDay.month &&
             _expenses[j].date.day == weekDay.day) {
-          // If found then add the amount to total
           total += _expenses[j].amount;
         }
       }
-
-      // Add to a list
       data.add({'day': weekDay, 'amount': total});
     }
-    // Return the list
     return data;
+  }
+  
+  // SPLIT EXPENSE METHODS
+
+  void fetchSplitGroups() {
+    if (_userId == null) return;
+    _firestoreService.fetchSplitGroups(_userId!).listen((groups) {
+      _splitGroups = groups;
+      notifyListeners();
+    });
+  }
+
+  Future<void> addSplitGroup(String title, List<String> members) async {
+    if (_userId == null) return;
+    final newGroup = SplitGroup(
+      id: '',
+      title: title,
+      members: members,
+      totalExpenses: 0.0
+    );
+    final docId = await _firestoreService.addSplitGroup(_userId!, newGroup);
+    final file = SplitGroup(
+      id: docId,
+      title: newGroup.title,
+      members: newGroup.members,
+      totalExpenses: newGroup.totalExpenses,
+      isHold: newGroup.isHold
+    );
+    _splitGroups.add(file);
+    notifyListeners();
+  }
+  
+  Future<void> deleteSplitGroup(String groupId) async {
+    if (_userId == null) return;
+    await _firestoreService.deleteSplitGroup(_userId!, groupId);
+    _splitGroups.removeWhere((element) => element.id == groupId);
+    notifyListeners();
+  }
+  
+  // REMOVED: toggleSplitGroupHold logic as requested.
+
+  // NEW: Update Split Group Title
+  Future<void> updateSplitGroupTitle(String groupId, String newTitle) async {
+    if (_userId == null) return;
+    
+    await _firestoreService.updateSplitGroupTitle(_userId!, groupId, newTitle);
+    
+    // Update local list manually for immediate UI responsiveness
+    final index = _splitGroups.indexWhere((e) => e.id == groupId);
+    if (index != -1) {
+      final currentGroup = _splitGroups[index];
+      _splitGroups[index] = SplitGroup(
+        id: currentGroup.id,
+        title: newTitle, 
+        members: currentGroup.members,
+        totalExpenses: currentGroup.totalExpenses,
+        isHold: currentGroup.isHold,
+      );
+    }
+    notifyListeners();
+  }
+
+
+  void selectSplitGroup(SplitGroup group) {
+    _currentSplitGroup = group;
+    if (_userId == null) {
+      notifyListeners();
+      return;
+    }
+    _firestoreService.fetchGroupExpenses(_userId!, group.id).listen((expenses) {
+      _groupExpenses = expenses;
+      
+      double total = expenses.where((e) => e.isHold == false).fold(0.0, (sum, exp) => sum + exp.totalAmount);
+      
+      if (_currentSplitGroup!.totalExpenses.toStringAsFixed(2) != total.toStringAsFixed(2)) {
+        final updatedGroup = SplitGroup(
+          id: _currentSplitGroup!.id,
+          title: _currentSplitGroup!.title,
+          members: _currentSplitGroup!.members,
+          totalExpenses: total,
+          isHold: _currentSplitGroup!.isHold
+        );
+        _currentSplitGroup = updatedGroup;
+        _firestoreService.updateSplitGroup(_userId!, _currentSplitGroup!);
+      }
+
+      notifyListeners();
+    });
+    notifyListeners();
+  }
+
+  Future<void> addGroupExpense(GroupExpense exp) async {
+    if (_userId == null || _currentSplitGroup == null) return;
+    await _firestoreService.addGroupExpense(_userId!, _currentSplitGroup!.id, exp);
+  }
+  
+  Future<void> updateGroupExpense(GroupExpense exp) async {
+    if (_userId == null || _currentSplitGroup == null) return;
+    await _firestoreService.updateGroupExpense(_userId!, _currentSplitGroup!.id, exp);
+  }
+  
+  Future<void> deleteGroupExpense(String expenseId) async {
+    if (_userId == null || _currentSplitGroup == null) return;
+    await _firestoreService.deleteGroupExpense(_userId!, _currentSplitGroup!.id, expenseId);
+  }
+
+  Future<void> toggleGroupExpenseHold(GroupExpense expense) async {
+    if (_userId == null || _currentSplitGroup == null) return;
+    final newHoldStatus = !expense.isHold;
+    final groupId = _currentSplitGroup!.id;
+
+    await _firestoreService.updateGroupExpenseHoldStatus(
+      _userId!, 
+      groupId, 
+      expense.id, 
+      newHoldStatus
+    );
+  }
+
+  Future<void> addMemberToCurrentGroup(String memberName) async {
+    if (_currentSplitGroup == null || _userId == null) return;
+
+    if (!_currentSplitGroup!.members.contains(memberName)) {
+      _currentSplitGroup!.members.add(memberName);
+      await _firestoreService.updateSplitGroup(_userId!, _currentSplitGroup!);
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteMemberFromCurrentGroup(String memberName) async {
+    if (_currentSplitGroup == null || _userId == null) return;
+
+    _currentSplitGroup!.members.remove(memberName);
+    await _firestoreService.updateSplitGroup(_userId!, _currentSplitGroup!);
+    notifyListeners();
+  }
+
+
+  // Core Settlement Logic (Custom/Unequal Split amounts)
+  List<Map<String, dynamic>> calculateSettlement() {
+    if (_currentSplitGroup == null || _groupExpenses.isEmpty) return [];
+
+    final activeExpenses = _groupExpenses.where((e) => e.isHold == false).toList();
+    if (activeExpenses.isEmpty) return [];
+
+    final members = _currentSplitGroup!.members;
+    final Map<String, double> balances = { for (var member in members) member: 0.0 };
+
+    for (var exp in activeExpenses) { 
+      // Credit the person who paid the total amount
+      balances[exp.paidBy] = (balances[exp.paidBy] ?? 0.0) + exp.totalAmount;
+      
+      // Debit involved members their specific share amount (memberShares)
+      exp.memberShares.forEach((member, share) {
+          balances[member] = (balances[member] ?? 0.0) - share;
+      });
+    }
+    
+    final creditors = balances.entries
+        .where((e) => e.value > 0.01) 
+        .toList()
+        ..sort((a, b) => b.value.compareTo(a.value)); 
+
+    final debtors = balances.entries
+        .where((e) => e.value < -0.01)
+        .toList()
+        ..sort((a, b) => a.value.compareTo(b.value)); 
+        
+    List<Map<String, dynamic>> settlements = [];
+    int i = 0, j = 0;
+    while (i < creditors.length && j < debtors.length) {
+      String creditor = creditors[i].key;
+      double creditorAmount = creditors[i].value;
+      String debtor = debtors[j].key;
+      double debtorAmount = -debtors[j].value; 
+
+      double settlementAmount = (debtorAmount < creditorAmount) ? debtorAmount : creditorAmount;
+
+      settlements.add({
+        'payer': debtor,
+        'receiver': creditor,
+        'amount': settlementAmount,
+      });
+
+      // Update balances
+      creditors[i] = MapEntry(creditor, creditorAmount - settlementAmount);
+      debtors[j] = MapEntry(debtor, debtors[j].value + settlementAmount);
+
+      if (creditors[i].value.abs() < 0.01) i++;
+      if (debtors[j].value.abs() < 0.01) j++;
+    }
+    
+    return settlements;
   }
 }
